@@ -1,0 +1,5 @@
+/vendor/ 
+/config/mail.php 
+/.env 
+/config/local.php 
+*.log 
