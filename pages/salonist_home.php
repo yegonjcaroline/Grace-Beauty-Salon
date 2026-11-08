@@ -1,6 +1,16 @@
-<?php require_role(['salonist']); ?>
-<section class="bg-white rounded-3xl p-8 shadow-sm">
-  <p class="text-rose-500 uppercase tracking-widest text-xs">Salonist space</p>
-  <h1 class="text-3xl font-semibold mt-2">Hello, <?= e($_SESSION['full_name']) ?></h1>
-  <p class="text-slate-600 mt-3">View the appointments assigned to you from the sidebar.</p>
+<?php
+require_role(['salonist']);
+$salonistId = (int) $_SESSION['user_id'];
+$statsQuery = $pdo->prepare("SELECT COUNT(*) AS total, SUM(status = 'pending') AS pending, SUM(status IN ('pending','confirmed') AND appointment_date >= CURDATE()) AS upcoming FROM appointments WHERE salonist_id = :salonist_id");
+$statsQuery->execute(['salonist_id' => $salonistId]);
+$stats = $statsQuery->fetch() ?: ['total' => 0, 'pending' => 0, 'upcoming' => 0];
+$appointmentsQuery = $pdo->prepare("SELECT a.appointment_date, a.appointment_time, a.status, s.name AS service_name, u.full_name AS customer_name FROM appointments a JOIN services s ON s.id = a.service_id JOIN users u ON u.id = a.customer_id WHERE a.salonist_id = :salonist_id AND a.status <> 'cancelled' AND a.appointment_date >= CURDATE() ORDER BY a.appointment_date, a.appointment_time LIMIT 5");
+$appointmentsQuery->execute(['salonist_id' => $salonistId]);
+$upcomingAppointments = $appointmentsQuery->fetchAll();
+?>
+<section class="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p class="text-xs font-semibold uppercase tracking-[.18em] text-rose-500">Salonist space</p><h1 class="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Good day, <?= e($_SESSION['full_name']) ?></h1><p class="mt-2 text-sm text-slate-500">Here is your appointment schedule at a glance.</p></div><a href="dashboard.php?page=appointments" class="inline-flex items-center justify-center rounded-xl bg-rose-500 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-rose-600">View assigned appointments</a></section>
+<section class="mb-6 grid gap-4 sm:grid-cols-3" aria-label="Appointment summary">
+<?php foreach ([['Assigned appointments', (int) $stats['total'], '▣'], ['Awaiting action', (int) $stats['pending'], '◷'], ['Upcoming visits', (int) $stats['upcoming'], '♡']] as [$label, $value, $icon]): ?><article class="flex items-center gap-4 rounded-2xl border border-rose-100 bg-white p-5 shadow-sm"><span class="grid h-12 w-12 place-items-center rounded-2xl bg-rose-50 text-xl text-rose-500"><?= e($icon) ?></span><div><p class="text-sm text-slate-500"><?= e($label) ?></p><p class="mt-1 text-2xl font-semibold"><?= $value ?></p></div></article><?php endforeach; ?>
 </section>
+<section class="rounded-2xl border border-rose-100 bg-white p-5 shadow-sm sm:p-6"><div class="mb-4 flex items-center justify-between gap-3"><div><h2 class="text-lg font-semibold">Your upcoming appointments</h2><p class="mt-1 text-sm text-slate-500">Your next assigned client visits.</p></div><a href="dashboard.php?page=appointments" class="shrink-0 text-sm font-medium text-rose-600">View all</a></div>
+<?php if (!$upcomingAppointments): ?><div class="rounded-xl bg-rose-50/70 px-4 py-8 text-center"><p class="font-medium">No upcoming assigned appointments</p><p class="mt-1 text-sm text-slate-500">New assignments will appear here.</p></div><?php else: ?><div class="divide-y divide-rose-50"><?php foreach ($upcomingAppointments as $appointment): ?><article class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between"><div class="flex items-start gap-3"><span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-rose-50 text-rose-500">♡</span><div><p class="font-medium"><?= e($appointment['service_name']) ?> <span class="font-normal text-slate-500">for <?= e($appointment['customer_name']) ?></span></p><p class="mt-1 text-sm text-slate-500"><?= e(date('D, j M Y', strtotime($appointment['appointment_date']))) ?> at <?= e(date('g:i A', strtotime($appointment['appointment_time']))) ?></p></div></div><span class="w-fit rounded-full bg-rose-50 px-3 py-1 text-xs font-medium capitalize text-rose-700"><?= e($appointment['status']) ?></span></article><?php endforeach; ?></div><?php endif; ?></section>
